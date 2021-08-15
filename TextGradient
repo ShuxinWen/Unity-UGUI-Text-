@@ -1,0 +1,153 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+
+[RequireComponent(typeof(Text))]
+public class TextGradient : BaseMeshEffect
+{
+    public enum GradientDirection { Horizontal, Vertical,LeftUpToRightDown,LeftDownToRightUp }
+
+    [SerializeField]  //定义序列化属性，一会的Editor中需要通过定义的这个属性找到该字段
+    public Color32 topColor = Color.white;//顶部颜色
+    [SerializeField]
+    public Color32 bottomColor = Color.black;//底部颜色
+    [SerializeField]
+    public GradientDirection gradientDirection;//渐变方向
+    [SerializeField]
+    public bool useEffect = false;//是否使用阴影
+    [SerializeField]
+    public Color effectColor = new Color(0f, 0f, 0f, 0.5f);//阴影颜色
+    [SerializeField]
+    public Vector2 effectDistance = new Vector2(1f, -1f);//阴影偏移
+
+    private const int DefautlVertexNumPerFont = 6;//顶点数
+
+    List<UIVertex> vertexBuffers = new List<UIVertex>();
+    public Mesh mesh = null;
+
+
+    /// <summary>
+    /// 给顶点着色
+    /// </summary>
+    /// <param name="vertexList"></param>
+    /// <param name="index"></param>
+    /// <param name="color"></param>
+    private void ModifyVertexColor(List<UIVertex> vertexList, int index, Color color)
+    {
+        UIVertex temp = vertexList[index];
+        temp.color = color;
+        vertexList[index] = temp;
+    }
+    //修改网格时调用
+    public override void ModifyMesh(VertexHelper vh)
+    {
+        if (!IsActive())
+        {
+            return;
+        }
+        vh.GetUIVertexStream(vertexBuffers);//获取顶点
+        Debug.Log(vertexBuffers.Count);
+
+        //在Inspector中显示网格
+        if (mesh == null)
+        {
+            mesh = new Mesh();
+        }
+        vh.FillMesh(mesh);
+
+
+        int count = vertexBuffers.Count;
+        if (count > 0)
+        {
+            /**给顶点着色( 这里需要明白顶点的顺序 )            
+            *   5-0 ---- 1
+            *    | \    |
+            *    |  \   |
+            *    |   \  |
+            *    |    \ |
+            *    4-----3-2
+            **/
+            for (int i = 0; i < count; i += DefautlVertexNumPerFont)
+            {
+                //分别设置每个顶点的颜色
+                switch (gradientDirection)
+                {
+                    case GradientDirection.Horizontal:
+                        ModifyVertexColor(vertexBuffers, i, topColor);
+                        ModifyVertexColor(vertexBuffers, i + 1, topColor);
+                        ModifyVertexColor(vertexBuffers, i + 2, bottomColor);
+                        ModifyVertexColor(vertexBuffers, i + 3, bottomColor);
+                        ModifyVertexColor(vertexBuffers, i + 4, bottomColor);
+                        ModifyVertexColor(vertexBuffers, i + 5, topColor);
+                        break;
+                    case GradientDirection.Vertical:
+                        ModifyVertexColor(vertexBuffers, i, topColor);
+                        ModifyVertexColor(vertexBuffers, i + 1, bottomColor);
+                        ModifyVertexColor(vertexBuffers, i + 2, bottomColor);
+                        ModifyVertexColor(vertexBuffers, i + 3, bottomColor);
+                        ModifyVertexColor(vertexBuffers, i + 4, topColor);
+                        ModifyVertexColor(vertexBuffers, i + 5, topColor);
+                        break;
+                    case GradientDirection.LeftUpToRightDown:
+                        ModifyVertexColor(vertexBuffers, i, topColor);
+                        ModifyVertexColor(vertexBuffers, i + 1, bottomColor);
+                        ModifyVertexColor(vertexBuffers, i + 2, topColor);
+                        ModifyVertexColor(vertexBuffers, i + 3, topColor);
+                        ModifyVertexColor(vertexBuffers, i + 4, bottomColor);
+                        ModifyVertexColor(vertexBuffers, i + 5, topColor);
+                        break;
+                    case GradientDirection.LeftDownToRightUp:
+                        ModifyVertexColor(vertexBuffers, i, bottomColor);
+                        ModifyVertexColor(vertexBuffers, i + 1, topColor);
+                        ModifyVertexColor(vertexBuffers, i + 2, bottomColor);
+                        ModifyVertexColor(vertexBuffers, i + 3, bottomColor);
+                        ModifyVertexColor(vertexBuffers, i + 4, topColor);
+                        ModifyVertexColor(vertexBuffers, i + 5, bottomColor);
+                        break;
+                    default:
+                        break;
+                }                
+            }
+        }
+
+        if (useEffect)//是否使用阴影（如果不需要阴影功能可以这部分代码删掉）
+        {
+            //扩充一倍的顶点容量
+            var neededCapacity = vertexBuffers.Count * 2;
+            if (vertexBuffers.Capacity < neededCapacity)
+                vertexBuffers.Capacity = neededCapacity;
+
+            for (int i = 0, cnt = vertexBuffers.Count; i < cnt; ++i)
+            {
+                var vt = vertexBuffers[i];
+                vertexBuffers.Add(vt);
+
+                Vector3 v = vt.position;
+                v.x += effectDistance.x;
+                v.y += effectDistance.y;
+                vt.position = v;
+                vt.color = effectColor;
+                vertexBuffers[i] = vt;
+            }
+        }
+        vh.Clear();
+        //这个方法向VertexHelper中批量增加三角形顶点数据,参数的长度必须是三的倍数
+        vh.AddUIVertexTriangleStream(vertexBuffers);
+    }
+
+   /// <summary>
+   /// 在Scene中显示顶点
+   /// </summary>
+    void OnDrawGizmos()
+    {
+        Gizmos.color = Color.red;//设置颜色
+        for (int i = 0; i < vertexBuffers.Count; i++)
+        {
+            //把mesh顶点转为世界坐标
+            Vector3 targetPosition = transform.TransformPoint(vertexBuffers[i].position);
+            Gizmos.DrawSphere(targetPosition, 5f);
+        }
+    }
+}
